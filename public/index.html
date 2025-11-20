@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Car Sound Diagnosis Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Inter font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Marked (Markdown parser) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    :root {
+      --primary-color: #ef4444; /* Red 500 */
+      --bg-color: #0b1220;      /* Slate 950 */
+      --card-color: #020617;    /* Slate 950-ish */
+      --text-color: #e5e7eb;    /* Gray 200 */
+      --record-color: #10b981;  /* Emerald 500 */
+    }
+    body {
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at top, #1f2937 0, #020617 45%, #020617 100%);
+      color: var(--text-color);
+      min-height: 100vh;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.92);
+      border-radius: 1rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow:
+        0 20px 50px rgba(15, 23, 42, 0.9),
+        0 0 0 1px rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(16px);
+    }
+    .btn-primary {
+      background-color: var(--primary-color);
+      transition: background-color 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
+    }
+    .btn-primary:hover {
+      background-color: #dc2626;
+      transform: translateY(-1px);
+      box-shadow: 0 10px 25px rgba(248, 113, 113, 0.35);
+    }
+    .btn-primary:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+    .btn-record-active {
+      background-color: var(--record-color);
+      box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+    }
+    .form-input,
+    .form-select {
+      background-color: #020617;
+      border-radius: 0.5rem;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      color: var(--text-color);
+      outline: none;
+    }
+    .form-input:focus,
+    .form-select:focus {
+      border-color: #f97316;
+      box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.45);
+    }
+    .spinner {
+      border: 3px solid rgba(248, 250, 252, 0.25);
+      border-top: 3px solid var(--primary-color);
+      border-radius: 999px;
+      width: 20px;
+      height: 20px;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    .action-btn {
+      background-color: #1d4ed8;
+      color: #f9fafb;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background-color 0.15s ease, transform 0.08s ease;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .action-btn.copy-btn {
+      background-color: #dc2626;
+    }
+    .action-btn:hover {
+      background-color: #059669;
+      transform: translateY(-1px);
+    }
+    .action-btn.copy-btn:hover {
+      background-color: #b91c1c;
+    }
+    .search-query-box {
+      background: radial-gradient(circle at top left, rgba(248, 250, 252, 0.06), rgba(15, 23, 42, 0.85));
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+    .markdown-body h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-top: 0.75rem;
+      margin-bottom: 0.25rem;
+      color: #fefce8;
+    }
+    .markdown-body p {
+      margin-top: 0.2rem;
+      margin-bottom: 0.4rem;
+      color: #e5e7eb;
+    }
+    .markdown-body ul {
+      margin-left: 1.2rem;
+      margin-bottom: 0.4rem;
+    }
+    .markdown-body li {
+      margin-bottom: 0.15rem;
+    }
+    .markdown-body strong {
+      color: #f97316;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center px-4 py-8">
+
+  <main class="w-full max-w-3xl glass-card px-6 py-6 md:px-10 md:py-8 space-y-6">
+    <!-- Header -->
+    <header class="flex items-center justify-between gap-4">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center gap-2">
+          🔧 Car Sound Diagnosis
+        </h1>
+        <p class="text-xs md:text-sm text-slate-300 mt-1">
+          Describe the situation, “record” the sound, and let the AI suggest the most likely issues + step-by-step repair
+          guidance.
+        </p>
+      </div>
+      <div class="hidden md:flex flex-col text-right text-[0.65rem] text-slate-400">
+        <span class="uppercase tracking-wide">Powered by</span>
+        <span class="font-semibold text-slate-100">OpenAI · gpt-4.1-mini</span>
+      </div>
+    </header>
+
+    <div class="grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-6 md:gap-8 items-start">
+      <!-- Left: Forms (Step 1 + Step 2) -->
+      <section class="space-y-4">
+        <!-- Step 1 -->
+        <section id="step-1" class="space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-slate-100 uppercase tracking-wide flex items-center gap-2">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-600/90 text-[0.65rem] font-bold">1</span>
+              Vehicle context
+            </h2>
+            <p class="text-[0.7rem] text-slate-400">30–45 seconds</p>
+          </div>
+
+          <form id="context-form" class="space-y-4">
+            <!-- When it happens -->
+            <div class="space-y-1">
+              <label for="sound_context" class="text-xs font-medium text-slate-200">
+                When do you hear the sound?
+              </label>
+              <select id="sound_context" class="form-select w-full px-3 py-2 text-sm" required>
+                <option value="">Select an option…</option>
+                <option value="Accelerating">Accelerating</option>
+                <option value="Braking">Braking</option>
+                <option value="Idling">Idling (stopped, engine running)</option>
+                <option value="Cold Start">Cold start</option>
+                <option value="Turning">Turning</option>
+                <option value="High Speed (over 60 mph)">High speed (over 60 mph)</option>
+                <option value="Rough Road">Driving over rough roads / bumps</option>
+                <option value="Always">Always (continuous)</option>
+              </select>
+            </div>
+
+            <!-- Car Type & Mileage -->
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-1">
+                <label for="car_fuel" class="text-xs font-medium text-slate-200">Fuel type</label>
+                <select id="car_fuel" class="form-select w-full px-3 py-2 text-sm" required>
+                  <option value="Petrol">Petrol</option>
+                  <option value="Diesel">Diesel</option>
+                  <option value="Electric/Hybrid">Electric / Hybrid</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label for="car_trans" class="text-xs font-medium text-slate-200">Transmission</label>
+                <select id="car_trans" class="form-select w-full px-3 py-2 text-sm" required>
+                  <option value="Manual">Manual</option>
+                  <option value="Automatic">Automatic</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="space-y-1">
+              <label for="car_mileage" class="text-xs font-medium text-slate-200">
+                Mileage (approximate)
+              </label>
+              <input
+                id="car_mileage"
+                type="number"
+                class="form-input w-full px-3 py-2 text-sm"
+                placeholder="e.g. 85000"
+                required
+              />
+            </div>
+
+            <!-- Location -->
+            <div class="space-y-1">
+              <label for="sound_location" class="text-xs font-medium text-slate-200">
+                Where does the sound seem to come from?
+              </label>
+              <select id="sound_location" class="form-select w-full px-3 py-2 text-sm" required>
+                <option value="">Select an option…</option>
+                <option value="Front-Left">Front-left wheel / engine bay</option>
+                <option value="Front-Right">Front-right wheel / engine bay</option>
+                <option value="Rear-Left">Rear-left wheel / suspension</option>
+                <option value="Rear-Right">Rear-right wheel / suspension</option>
+                <option value="Center (Underneath)">Center (underneath the car)</option>
+                <option value="Interior (Dashboard)">Interior (dashboard / cabin)</option>
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              class="btn-primary w-full mt-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+            >
+              Continue · Step 2
+            </button>
+          </form>
+        </section>
+
+        <!-- Step 2 -->
+        <section id="step-2" class="space-y-4 hidden">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-slate-100 uppercase tracking-wide flex items-center gap-2">
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-[0.65rem] font-bold">2</span>
+              Capture sound & diagnose
+            </h2>
+            <button
+              id="back-btn"
+              type="button"
+              class="text-[0.7rem] text-slate-400 hover:text-slate-100 transition"
+            >
+              ← Back to step 1
+            </button>
+          </div>
+
+          <!-- Recording -->
+          <div class="rounded-xl border border-slate-700/80 bg-slate-950/80 px-4 py-3 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-200 tracking-wide uppercase">
+                Simulated recording
+              </span>
+              <span class="text-[0.7rem] text-slate-400">3 seconds</span>
+            </div>
+
+            <button
+              id="record-btn"
+              type="button"
+              class="btn-primary w-full py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+            >
+              Start recording
+            </button>
+            <p
+              id="record-status"
+              class="text-[0.7rem] text-slate-400 text-center"
+            >
+              Press the button to simulate capturing the sound (auto-stops after 3 seconds).
+            </p>
+            <p
+              id="ready-message"
+              class="text-[0.7rem] text-amber-300 text-center font-semibold hidden"
+            >
+              Recording complete. You can now run the diagnosis.
+            </p>
+          </div>
+
+          <!-- Diagnose button -->
+          <form id="diagnosis-form" class="space-y-3">
+            <button
+              id="diagnose-btn"
+              type="submit"
+              disabled
+              class="btn-primary w-full py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+            >
+              <span id="diagnose-text">Run diagnosis</span>
+              <span id="diagnose-spinner" class="spinner hidden"></span>
+            </button>
+          </form>
+        </section>
+      </section>
+
+      <!-- Right: Results -->
+      <aside
+        id="results-area"
+        class="rounded-xl border border-slate-700/70 bg-slate-950/80 px-4 py-4 md:px-5 md:py-5 space-y-3 hidden"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="text-sm font-semibold text-slate-100 uppercase tracking-wide flex items-center gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-500 text-[0.65rem] font-bold">
+              3
+            </span>
+            Diagnosis results
+          </h2>
+          <span class="text-[0.7rem] text-slate-400">Top 3 most likely issues</span>
+        </div>
+
+        <p id="error-message" class="text-xs text-red-400 hidden"></p>
+
+        <div
+          id="diagnosis-content"
+          class="markdown-body text-xs md:text-sm leading-relaxed space-y-2"
+        ></div>
+
+        <div
+          id="citation-area"
+          class="border-t border-slate-700/70 pt-3 mt-2 text-[0.7rem] text-slate-400 hidden"
+        >
+          <p class="font-semibold mb-1 text-slate-300">Sources</p>
+          <ul id="sources-list" class="list-disc ml-4 space-y-0.5"></ul>
+        </div>
+
+        <p class="mt-3 text-[0.65rem] text-slate-500">
+          ⚠️ This tool does not replace a professional inspection. Use it as a guide before visiting a mechanic.
+        </p>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    // --- Global configuration (frontend) ---
+    const API_URL = "/api/diagnose"; // our Node backend route
+
+    // DOM elements
+    const step1 = document.getElementById("step-1");
+    const step2 = document.getElementById("step-2");
+    const contextForm = document.getElementById("context-form");
+    const diagnosisForm = document.getElementById("diagnosis-form");
+    const diagnoseBtn = document.getElementById("diagnose-btn");
+    const diagnoseText = document.getElementById("diagnose-text");
+    const diagnoseSpinner = document.getElementById("diagnose-spinner");
+    const resultsArea = document.getElementById("results-area");
+    const diagnosisContent = document.getElementById("diagnosis-content");
+    const backBtn = document.getElementById("back-btn");
+    const errorMessage = document.getElementById("error-message");
+    const citationArea = document.getElementById("citation-area");
+    const sourcesList = document.getElementById("sources-list");
+
+    const recordBtn = document.getElementById("record-btn");
+    const recordStatus = document.getElementById("record-status");
+    const readyMessage = document.getElementById("ready-message");
+
+    let isRecording = false;
+    let recordingTimer = null;
+    let contextData = {};
+
+    // Clipboard helper
+    function copyToClipboard(text, button) {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      document.body.appendChild(textarea);
+      textarea.select();
+
+      try {
+        document.execCommand("copy");
+        if (button) {
+          const original = button.textContent;
+          button.textContent = "Copied!";
+          setTimeout(() => (button.textContent = original), 1500);
+        }
+      } catch (err) {
+        console.error("Failed to copy:", err);
+        if (button) button.textContent = "Failed";
+      }
+      document.body.removeChild(textarea);
+    }
+
+    // Loading UI
+    function showLoading(isLoading) {
+      diagnoseBtn.disabled = isLoading;
+      diagnoseText.textContent = isLoading ? "Diagnosing…" : "Run diagnosis";
+      diagnoseSpinner.classList.toggle("hidden", !isLoading);
+    }
+
+    // Errors
+    function displayError(msg) {
+      errorMessage.textContent = msg;
+      errorMessage.classList.remove("hidden");
+      resultsArea.classList.remove("hidden");
+      diagnosisContent.innerHTML = "";
+      citationArea.classList.add("hidden");
+    }
+
+    // Render results
+    function displayResults(text, sources) {
+      errorMessage.classList.add("hidden");
+      resultsArea.classList.remove("hidden");
+
+      let htmlContent = marked.parse(text);
+
+      // Transform "YouTube Search Query" lines into nice UI
+      const youtubeRegex = /<p>YouTube Search Query: (.*?)<\/p>/g;
+      htmlContent = htmlContent.replace(youtubeRegex, (match, query) => {
+        const searchLink =
+          "https://www.youtube.com/results?search_query=" +
+          encodeURIComponent(query);
+
+        const copyBtn = `
+            <button class="action-btn copy-btn" onclick="copyQuery(this, '${query.replace(/'/g, "\\'")}')">
+              Copy query
+            </button>`;
+
+        const searchBtn = `
+            <a href="${searchLink}" target="_blank" class="action-btn">
+              Open video search
+            </a>`;
+
+        const searchTermLink = `
+            <a href="${searchLink}" target="_blank"
+               class="font-mono text-[0.7rem] md:text-xs block mb-1 text-amber-200 hover:underline">
+              Search term: ${query}
+            </a>`;
+
+        return `
+          <div class="mt-3 border-t border-slate-700/70 pt-3">
+            <p class="text-[0.75rem] font-semibold text-red-400 mb-1">Video repair guide</p>
+            <div class="search-query-box">
+              ${searchTermLink}
+              <div class="flex flex-col sm:flex-row gap-2 mt-1">
+                ${copyBtn}
+                ${searchBtn}
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      diagnosisContent.innerHTML = htmlContent;
+      window.copyQuery = (btn, query) => copyToClipboard(query, btn);
+
+      // We don't get web sources from backend for now → hide
+      sourcesList.innerHTML = "";
+      citationArea.classList.add("hidden");
+    }
+
+    // Backoff for fetch
+    async function fetchWithBackoff(url, options, maxRetries = 5, delay = 1000) {
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          const res = await fetch(url, options);
+          if (res.ok || res.status !== 429) {
+            return res;
+          }
+          if (res.status === 429 && i < maxRetries - 1) {
+            await new Promise((r) => setTimeout(r, delay));
+            delay *= 2;
+          } else {
+            throw new Error("HTTP " + res.status);
+          }
+        } catch (err) {
+          if (i === maxRetries - 1) throw err;
+          await new Promise((r) => setTimeout(r, delay));
+          delay *= 2;
+        }
+      }
+    }
+
+    // Recording simulation
+    function startRecordingSimulation() {
+      isRecording = true;
+      recordBtn.textContent = "Recording…";
+      recordBtn.classList.remove("btn-primary");
+      recordBtn.classList.add("btn-record-active");
+      recordStatus.textContent = "Capturing sound… keep vehicle behaviour the same.";
+      diagnoseBtn.disabled = true;
+      readyMessage.classList.add("hidden");
+
+      recordingTimer = setTimeout(stopRecordingSimulation, 3000);
+    }
+
+    function stopRecordingSimulation() {
+      isRecording = false;
+      if (recordingTimer) {
+        clearTimeout(recordingTimer);
+        recordingTimer = null;
+      }
+      recordBtn.textContent = "Start recording again";
+      recordBtn.classList.remove("btn-record-active");
+      recordBtn.classList.add("btn-primary");
+      recordStatus.textContent =
+        "Recording complete. If the sound changes, you can record again before diagnosing.";
+      diagnoseBtn.disabled = false;
+      readyMessage.classList.remove("hidden");
+    }
+
+    // --- Event listeners ---
+
+    recordBtn.addEventListener("click", () => {
+      if (!isRecording) startRecordingSimulation();
+      else stopRecordingSimulation();
+    });
+
+    contextForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      contextData = {
+        sound_context: document.getElementById("sound_context").value,
+        car_fuel: document.getElementById("car_fuel").value,
+        car_trans: document.getElementById("car_trans").value,
+        car_mileage: document.getElementById("car_mileage").value,
+        sound_location: document.getElementById("sound_location").value,
+      };
+
+      step1.classList.add("hidden");
+      step2.classList.remove("hidden");
+      resultsArea.classList.add("hidden");
+      diagnosisContent.innerHTML = "";
+      diagnoseBtn.disabled = true;
+      readyMessage.classList.add("hidden");
+      recordStatus.textContent =
+        "Press the button to simulate capturing the sound (auto-stops after 3 seconds).";
+      recordBtn.textContent = "Start recording";
+      recordBtn.classList.remove("btn-record-active");
+      recordBtn.classList.add("btn-primary");
+    });
+
+    diagnosisForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      if (isRecording) stopRecordingSimulation();
+
+      if (diagnoseBtn.disabled) {
+        displayError("Please record the sound first before running the diagnosis.");
+        return;
+      }
+
+      showLoading(true);
+
+      const genericDescription =
+        "A loud, rhythmic, and concerning noise was simulated. It is directly linked to the action '" +
+        contextData.sound_context +
+        "', and appears to come from '" +
+        contextData.sound_location +
+        "'. Assume this sound is a strong indicator of a mechanical issue related to that context.";
+
+      const userQuery = `
+I need a car diagnosis. The user has provided context and simulated recording of a concerning noise.
+
+- Car context: ${contextData.car_fuel}, ${contextData.car_trans}, mileage ~${contextData.car_mileage} miles.
+- When the sound occurs: ${contextData.sound_context}.
+- Suspected location: ${contextData.sound_location}.
+- Sound description (assumed): ${genericDescription}.
+
+Based on this context, list the 3 MOST PROBABLE mechanical issues.
+
+For each issue, provide:
+1. **Issue name** (bold).
+2. A short, non-technical explanation of what is happening.
+3. A precise, step-by-step **repair / troubleshooting plan** (what the user or mechanic should check and in which order).
+4. One **YouTube Search Query** line in this exact format:
+   YouTube Search Query: how to FIX &lt;issue&gt; on &lt;example car type&gt;
+
+Keep the tone clear and practical. Use Markdown with headings and bullet points. Do not invent safety-critical guarantees; always recommend visiting a qualified mechanic if the issue could affect safety.
+      `;
+
+      const systemPrompt =
+        "You are a careful automotive diagnostic assistant. You never give overconfident guarantees. You suggest the most likely faults, explain them clearly, and give practical, step-by-step troubleshooting and repair advice. You always remind users that a professional mechanic should confirm and repair safety-critical issues. Ensure the 'YouTube Search Query:' line is on its own line.";
+
+      try {
+        const res = await fetchWithBackoff(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userQuery, systemPrompt }),
+        });
+
+        const data = await res.json();
+
+        if (data.text) {
+          displayResults(data.text, []);
+        } else {
+          console.error("Backend response:", data);
+          displayError(
+            "Diagnosis failed. The server returned an empty or invalid response. Try again in a moment."
+          );
+        }
+      } catch (err) {
+        console.error("Diagnosis error:", err);
+        displayError(
+          "Failed to contact the diagnosis service. Check your connection or try again later."
+        );
+      } finally {
+        showLoading(false);
+      }
+    });
+
+    backBtn.addEventListener("click", () => {
+      step2.classList.add("hidden");
+      step1.classList.remove("hidden");
+      resultsArea.classList.add("hidden");
+      if (isRecording) stopRecordingSimulation();
+    });
+  </script>
+</body>
+</html>
